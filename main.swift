@@ -334,6 +334,10 @@ final class CornerWatcher {
     private var current: Corner?
     private var enteredAt = Date.distantPast
     private var fired = false
+    /// the drag pasteboard's change count while no mouse button was down, to tell a file drag from a window drag
+    private var dragBaseline = NSPasteboard(name: .drag).changeCount
+    /// whether the last tick was a drag and drop in progress
+    private var wasDragAndDrop = false
 
     /// Distance from the corner (in points) that still counts as "in the corner".
     private let tolerance: CGFloat = 3
@@ -348,8 +352,17 @@ final class CornerWatcher {
 
     private func tick() {
         guard settings.enabled else { reset(); return }
-        // Dragging a window or a file into a corner should not fire anything.
-        guard NSEvent.pressedMouseButtons == 0 else { reset(); return }
+        // Dragging a window into a corner fires nothing (macOS tiles it there). Dragging a file, an image or text does, after the
+        // corner's own delay like a plain visit: a drag and drop writes the drag pasteboard after the button went down, a window
+        // drag doesn't. The baseline is the count seen while no button was down.
+        let down = NSEvent.pressedMouseButtons != 0
+        let count = NSPasteboard(name: .drag).changeCount
+        if !down { dragBaseline = count }
+        let dragAndDrop = down && count != dragBaseline
+        guard !down || dragAndDrop else { wasDragAndDrop = false; reset(); return }
+        // Dropped in the corner: this visit is over; it fires again only after the pointer leaves and comes back.
+        if wasDragAndDrop && !down { fired = true }
+        wasDragAndDrop = dragAndDrop
 
         let hit = cornerUnderMouse()
         let corner = hit?.0
@@ -422,14 +435,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let toggle = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         toggle.target = self
         toggle.state = settings.enabled ? .on : .off
+        toggle.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         menu.addItem(toggle)
 
         let prefs = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         prefs.target = self
+        prefs.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(prefs)
         menu.addItem(.separator())
 
-        menu.addItem(NSMenuItem(title: "Quit Hot Corners", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let about = NSMenuItem(title: "About Hot Corners", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        about.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+        menu.addItem(about)
+
+        let quit = NSMenuItem(title: "Quit Hot Corners", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.image = NSImage(systemSymbolName: "rectangle.portrait.and.arrow.right", accessibilityDescription: nil)
+        menu.addItem(quit)
     }
 
     @objc private func openSettings() {
@@ -447,6 +469,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The standard About panel; it takes the icon, name, version and copyright from the bundle.
+    @objc private func showAbout() {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        let credits = NSAttributedString(
+            string: "Hot corners for Macs where the built-in ones are blocked.\nFree software under the GPL-3.0 license.",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style,
+            ])
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     @objc private func toggleEnabled() {

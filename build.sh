@@ -1,28 +1,17 @@
 #!/bin/bash
-# Builds build/HotCorners.app (universal: Apple Silicon + Intel).   ./build.sh [--install] [--zip]
+# Builds HotCorners.app (Apple Silicon only).   ./build.sh [--install] 
 #   --install  copies it to ~/Applications/HotCorners.app and launches it
-#   --zip      also writes build/HotCorners.zip, ready to hand to someone
 set -euo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
-app=$root/build/HotCorners.app
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+app=$root/HotCorners.app
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$root/Info.plist" "$app/Contents/Info.plist"
-for arch in arm64 x86_64; do
-	swiftc -O -swift-version 5 -target "$arch-apple-macos13.0" "$root"/*.swift -o "$tmp/HotCorners-$arch"
-done
-lipo -create "$tmp"/HotCorners-* -output "$app/Contents/MacOS/HotCorners"
+cp "$root/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
+swiftc -O -swift-version 5 -target arm64-apple-macos13.0 "$root"/*.swift -o "$app/Contents/MacOS/HotCorners"
 codesign --force --sign - "$app"
 echo "built $app"
-
-if [[ " $* " == *" --zip "* ]]; then
-	rm -f "$root/build/HotCorners.zip"
-	ditto -c -k --keepParent "$app" "$root/build/HotCorners.zip"
-	echo "zipped $root/build/HotCorners.zip"
-fi
 
 if [[ " $* " == *" --install "* ]]; then
 	pkill -x HotCorners || true

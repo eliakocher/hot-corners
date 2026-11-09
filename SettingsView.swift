@@ -15,145 +15,186 @@ struct SettingsView: View {
     @State private var previewToken = 0
     @State private var loginEnabled = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @State private var hovered: Corner?
 
     var body: some View {
-        VStack(spacing: 0) {
-            Form {
-                Section("General") {
-                    Toggle("Enabled", isOn: Binding(get: { settings.enabled }, set: { settings.enabled = $0 }))
-                    Toggle("Open at Login", isOn: Binding(get: { loginEnabled }, set: setLogin))
-                    if let loginError { Text(loginError).font(.caption).foregroundStyle(.secondary) }
-                }
-
-            }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
-            .frame(height: loginError == nil ? 165 : 195)
+        // Two columns: general switches and the live preview stay put on the left, the settings scroll on the right.
+        // With the app switched off only the general switches are shown.
+        HStack(spacing: 0) {
+            leftColumn
             if settings.enabled {
-            mockup.padding(.horizontal, 20)
-            Form {
-                Section {
-                    Picker(selection: Binding(
-                        get: { nearestDelay(settings.delay(for: selected)) }, set: { settings.setDelay($0, for: selected) })
-                    ) {
-                        ForEach(delayChoices, id: \.value) { Text($0.label).tag($0.value) }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Delay")
-                            Text("How long the pointer rests in the corner first").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    ForEach(Modifier.allCases, id: \.self) { mod in
-                        HStack(spacing: 10) {
-                            Image(systemName: mod.symbol)
-                                .frame(width: 28, height: 28)
-                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                            Text(mod.title)
-                            Spacer()
-                            ActionMenu(
-                                action: Binding(
-                                    get: { settings.action(for: selected, mod) },
-                                    set: { settings.setAction($0, for: selected, mod) }),
-                                shortcuts: shortcuts)
-                        }
-                    }
-                } header: {
-                    Text("\(selected.title) Corner")
-                } footer: {
-                    Text("Hold ⌘, ⌥, ⌃ or ⇧ as the pointer reaches the corner to run its other action. Nothing fires while a mouse button is down. Corners between two displays don't count.")
-                }
-
-                Section("Corner Glow") {
-                    Toggle("Glow when a corner fires", isOn: glow(\.enabled))
-                    if settings.glow.enabled {
-                        LabeledContent("Corner Color") { ColorSwatches(selection: glow(\.color).optional) }
-                        LabeledContent("Blend Into") { ColorSwatches(selection: glow(\.secondary), allowNone: true) }
-                        if settings.glow.secondary != nil {
-                            LabeledContent("Corner Color Reach") {
-                                HStack {
-                                    Slider(value: glow(\.balance), in: GlowConfig.balanceRange, step: 0.05)
-                                    Text("\(Int((settings.glow.balance * 100).rounded())) %").monospacedDigit().frame(width: 44)
-                                }
-                            }
-                        }
-                        Toggle("Bright center", isOn: glow(\.whiteCore))
-                        Picker("Animation", selection: glow(\.style)) {
-                            ForEach(GlowStyle.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
-                        Picker("Size", selection: glow(\.size)) {
-                            ForEach(GlowSize.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
-                        LabeledContent("Duration") {
-                            HStack {
-                                Slider(value: glow(\.duration), in: GlowConfig.durationRange, step: 0.1)
-                                Text(String(format: "%.1f s", settings.glow.duration)).monospacedDigit().frame(width: 44)
-                            }
-                        }
-                        LabeledContent("Opacity") {
-                            HStack {
-                                Slider(value: glow(\.opacity), in: GlowConfig.opacityRange, step: 0.05)
-                                Text("\(Int((settings.glow.opacity * 100).rounded())) %").monospacedDigit().frame(width: 44)
-                            }
-                        }
-                        HStack {
-                            Spacer()
-                            Button("Replay") { previewToken += 1 }
-                            Button("Test on Screen") { testOnScreen(selected) }
-                        }
-                    }
-                }
-            }
-            .formStyle(.grouped)
+                Divider()
+                settingsForm.frame(width: Self.rightWidth)
             }
         }
-        .frame(width: 560, height: settings.enabled ? 800 : 200, alignment: .top)
+        .frame(
+            width: settings.enabled ? Self.leftWidth + 1 + Self.rightWidth : Self.leftWidth,
+            height: settings.enabled ? 600 : 190)
+    }
+
+    private static let leftWidth: CGFloat = 420
+    private static let rightWidth: CGFloat = 480
+
+    // MARK: Left column
+
+    private var leftColumn: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            generalCard
+            if settings.enabled {
+                mockup
+                HStack {
+                    Spacer()
+                    Button("Replay") { previewToken += 1 }
+                    Button("Test on Screen") { testOnScreen(selected) }
+                }
+                .disabled(!settings.glow.enabled)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(width: Self.leftWidth, alignment: .top)
+    }
+
+    private var generalCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("General").font(.headline)
+            VStack(spacing: 0) {
+                switchRow("Enabled", isOn: Binding(get: { settings.enabled }, set: { settings.enabled = $0 }))
+                Divider().padding(.horizontal, 12)
+                switchRow("Open at Login", isOn: Binding(get: { loginEnabled }, set: setLogin))
+            }
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+            if let loginError { Text(loginError).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+
+    private func switchRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+    }
+
+    // MARK: Right column
+
+    private var settingsForm: some View {
+        Form {
+            Section {
+                Picker(selection: Binding(
+                    get: { nearestDelay(settings.delay(for: selected)) }, set: { settings.setDelay($0, for: selected) })
+                ) {
+                    ForEach(delayChoices, id: \.value) { Text($0.label).tag($0.value) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delay")
+                        Text("How long the pointer rests in the corner first").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                ForEach(Modifier.allCases, id: \.self) { mod in
+                    HStack(spacing: 10) {
+                        Image(systemName: mod.symbol)
+                            .frame(width: 28, height: 28)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        Text(mod.title)
+                        Spacer()
+                        ActionMenu(
+                            action: Binding(
+                                get: { settings.action(for: selected, mod) },
+                                set: { settings.setAction($0, for: selected, mod) }),
+                            shortcuts: shortcuts)
+                    }
+                }
+            } header: {
+                Text("\(selected.title) Corner")
+            } footer: {
+                Text("Hold ⌘, ⌥, ⌃ or ⇧ as the pointer reaches the corner to run its other action. Nothing fires while a mouse button is down. Corners between two displays don't count.")
+            }
+
+            Section("Corner Glow") {
+                Toggle("Glow when a corner fires", isOn: glow(\.enabled))
+                if settings.glow.enabled {
+                    LabeledContent("Corner Color") { ColorSwatches(selection: glow(\.color).optional) }
+                    LabeledContent("Blend Into") { ColorSwatches(selection: glow(\.secondary), allowNone: true) }
+                    if settings.glow.secondary != nil {
+                        LabeledContent("Corner Color Reach") {
+                            HStack {
+                                Slider(value: glow(\.balance), in: GlowConfig.balanceRange, step: 0.05)
+                                Text("\(Int((settings.glow.balance * 100).rounded())) %").monospacedDigit().frame(width: 44)
+                            }
+                        }
+                    }
+                    Toggle("Bright center", isOn: glow(\.whiteCore))
+                    Picker("Animation", selection: glow(\.style)) {
+                        ForEach(GlowStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Picker("Size", selection: glow(\.size)) {
+                        ForEach(GlowSize.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    LabeledContent("Duration") {
+                        HStack {
+                            Slider(value: glow(\.duration), in: GlowConfig.durationRange, step: 0.1)
+                            Text(String(format: "%.1f s", settings.glow.duration)).monospacedDigit().frame(width: 44)
+                        }
+                    }
+                    LabeledContent("Opacity") {
+                        HStack {
+                            Slider(value: glow(\.opacity), in: GlowConfig.opacityRange, step: 0.05)
+                            Text("\(Int((settings.glow.opacity * 100).rounded())) %").monospacedDigit().frame(width: 44)
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 
     // MARK: Mockup
 
+    /// A 16:9 "screen" with a card in each corner. The clear base view sets the 16:9 shape; the screen is drawn over it.
     private var mockup: some View {
+        Color.clear
+            .aspectRatio(16.0 / 9.0, contentMode: .fit)
+            .overlay { screen }
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.25), lineWidth: 1))
+    }
+
+    private var screen: some View {
         ZStack {
             LinearGradient(
                 colors: [Color(red: 0.13, green: 0.30, blue: 0.82), Color(red: 0.26, green: 0.12, blue: 0.46), Color(red: 0.56, green: 0.20, blue: 0.46)],
                 startPoint: .topLeading, endPoint: .bottomTrailing)
             if settings.glow.enabled {
-                GlowView(corner: selected, glow: settings.glow, side: 170)
+                GlowView(corner: selected, glow: settings.glow, side: 120)
                     .id(previewToken)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment(of: selected))
             }
+            Text("Click a corner to edit it")
+                .font(.caption).foregroundStyle(.white.opacity(0.5))
             VStack {
                 menuBar
                 Spacer()
-                dock
             }
             VStack {
                 HStack(alignment: .top) { card(.topLeft); Spacer(minLength: 8); card(.topRight) }
                 Spacer()
                 HStack(alignment: .bottom) { card(.bottomLeft); Spacer(minLength: 8); card(.bottomRight) }
             }
-            .padding(.horizontal, 12).padding(.top, 40).padding(.bottom, 12)
+            .padding(.horizontal, 12).padding(.top, 32).padding(.bottom, 12)
         }
-        .frame(height: 290)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.25), lineWidth: 1))
     }
 
     private var menuBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "apple.logo").font(.caption)
-            ForEach([34, 22, 28], id: \.self) { Capsule().fill(.white.opacity(0.7)).frame(width: CGFloat($0), height: 6) }
+            ForEach([34, 22, 28], id: \.self) { Capsule().fill(.white.opacity(0.7)).frame(width: CGFloat($0), height: 5) }
             Spacer()
-            ForEach([12, 12, 34], id: \.self) { Capsule().fill(.white.opacity(0.7)).frame(width: CGFloat($0), height: 6) }
+            ForEach([12, 12, 34], id: \.self) { Capsule().fill(.white.opacity(0.7)).frame(width: CGFloat($0), height: 5) }
         }
-        .padding(.horizontal, 12).frame(height: 26).background(.black.opacity(0.18))
+        .padding(.horizontal, 12).frame(height: 22).background(.black.opacity(0.18))
         .foregroundStyle(.white)
-    }
-
-    private var dock: some View {
-        HStack(spacing: 5) {
-            ForEach(0..<6, id: \.self) { _ in RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.35)).frame(width: 12, height: 12) }
-        }
-        .padding(7).background(.black.opacity(0.18), in: Capsule()).padding(.bottom, 10)
     }
 
     private func card(_ corner: Corner) -> some View {
@@ -161,29 +202,43 @@ struct SettingsView: View {
         let delay = settings.delay(for: corner)
         let extras = Modifier.allCases.filter { $0 != .plain && settings.action(for: corner, $0) != .none }
         let isRight = !corner.isLeft
-        return VStack(alignment: isRight ? .trailing : .leading, spacing: 5) {
+        return VStack(alignment: isRight ? .trailing : .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: plain.symbol)
                 Text(plain.title).fontWeight(.semibold).lineLimit(1)
-                Text(delay == 0 ? "Instant" : String(format: "%g s", delay))
-                    .font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(.white.opacity(0.18), in: Capsule())
             }
-            ForEach(extras, id: \.self) { mod in
-                Text("\(mod.glyph) \(settings.action(for: corner, mod).title)")
-                    .font(.caption).lineLimit(1)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(.white.opacity(0.14), in: Capsule())
+            HStack(spacing: 3) {
+                Image(systemName: "clock")
+                Text(delay == 0 ? "Instant" : String(format: "%g s", delay))
+            }
+            .font(.caption2.weight(.medium)).foregroundStyle(.white.opacity(0.65))
+            // the preview is small, so the modifier actions show as glyphs only; the details are in the list on the right
+            if !extras.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(extras, id: \.self) { mod in
+                        Text(mod.glyph).font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(.white.opacity(0.16), in: Capsule())
+                            .help("\(mod.title): \(settings.action(for: corner, mod).title)")
+                    }
+                }
             }
         }
         .font(.callout)
         .foregroundStyle(.white)
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(maxWidth: 215, alignment: isRight ? .trailing : .leading)
-        .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .frame(minWidth: 130, alignment: isRight ? .trailing : .leading)
+        .background(.black.opacity(hovered == corner ? 0.42 : 0.30), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.accentColor, lineWidth: selected == corner ? 2.5 : 0))
         .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onHover { inside in
+            if inside { hovered = corner } else if hovered == corner { hovered = nil }
+        }
+        .animation(.easeOut(duration: 0.12), value: hovered)
         .onTapGesture { selected = corner; previewToken += 1 }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("\(corner.title) corner")
     }
 
     // MARK: Pieces
