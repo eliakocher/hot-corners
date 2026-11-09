@@ -2,7 +2,7 @@
 
 A tiny menu bar app that replaces the macOS hot corners, for Macs where the built-in ones are blocked by settings. Needs macOS 13 or newer.
 
-<p align="center"><img src="docs/settings.png" alt="The Hot Corners settings window" width="420"></p>
+<p align="center"><img src="docs/settings.png" alt="The Hot Corners settings window" width="720"></p>
 
 ## Install
 
@@ -17,12 +17,15 @@ A tiny menu bar app that replaces the macOS hot corners, for Macs where the buil
 
 ## Usage
 
-Click the dashed rectangle in the menu bar: **Enabled**, **Settings…** (⌘,) and **Quit**.
+Click the dashed rectangle in the menu bar: **Enabled**, **Settings…** (⌘,), **About Hot Corners** and **Quit**.
 
-**Settings** has, top to bottom:
+**Settings** has two columns. On the left, which stays in place:
 
 - **General:** *Enabled* and *Open at Login*. Switch *Enabled* off and everything else is hidden. If your Mac's management settings block Open at Login, add the app by hand in System Settings → General → Login Items.
-- **A screen mockup** with a card per corner (action, delay, extras). Click a card to edit that corner.
+- **A screen mockup** with a card per corner (action, delay, and a ⌘ ⌥ ⌃ ⇧ chip for each extra action). Click a card to edit that corner. *Replay* and *Test on Screen* sit under it.
+
+On the right, which scrolls:
+
 - **The selected corner:** a delay (Instant, 0.15, 0.3, 0.5, 1 or 2 s: how long the pointer rests there first) and what it does, either with the pointer alone (*Corner Only*) or while holding ⌘, ⌥, ⌃ or ⇧ as it reaches the corner.
 - **Corner Glow:** see below.
 
