@@ -61,3 +61,7 @@ Settings are stored in `UserDefaults` under `dev.kocher.HotCorners`.
 | `Glow.swift` | the corner glow: its settings, the drawing and the panel that shows it |
 | `Info.plist` | bundle info (a menu bar app with no Dock icon) |
 | `build.sh` | builds a universal app, ad-hoc signs it, optionally zips and installs it |
+
+## License
+
+[GPL-3.0](LICENSE): free to use and modify, but anything you distribute based on it must stay open source under the same license.
